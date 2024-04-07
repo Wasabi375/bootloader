@@ -78,7 +78,9 @@ pub extern "C" fn _start(info: &mut BiosInfo) -> ! {
                 bootloader_page_table
                     .identity_map(
                         frame,
-                        PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                        PageTableFlags::PRESENT
+                            | PageTableFlags::WRITABLE
+                            | PageTableFlags::NO_EXECUTE,
                         &mut frame_allocator,
                     )
                     .unwrap()
@@ -260,6 +262,10 @@ fn detect_rsdp() -> Option<PhysAddr> {
     #[derive(Clone)]
     struct IdentityMapped;
     impl AcpiHandler for IdentityMapped {
+        // TODO FIXME: This inline(never) annotation is required. Without it,
+        // LLVM replaces the `search_for_on_bios` call below with a `ud2`
+        // instruction. See https://github.com/rust-osdev/bootloader/issues/425
+        #[inline(never)]
         unsafe fn map_physical_region<T>(
             &self,
             physical_address: usize,

@@ -39,7 +39,7 @@ pub mod serial;
 
 const PAGE_SIZE: u64 = 4096;
 
-/// Initialize a text-based logger using the given pixel-based framebuffer as output.  
+/// Initialize a text-based logger using the given pixel-based framebuffer as output.
 pub fn init_logger(
     framebuffer: &'static mut [u8],
     info: FrameBufferInfo,
@@ -195,10 +195,10 @@ where
     enable_write_protect_bit();
 
     let config = kernel.config;
-    let kernel_slice_start = kernel.start_address as u64;
+    let kernel_slice_start = PhysAddr::new(kernel.start_address as _);
     let kernel_slice_len = u64::try_from(kernel.len).unwrap();
 
-    let (entry_point, tls_template) = load_kernel::load_kernel(
+    let (kernel_image_offset, entry_point, tls_template) = load_kernel::load_kernel(
         kernel,
         kernel_page_table,
         frame_allocator,
@@ -294,14 +294,14 @@ where
         None
     };
     let ramdisk_slice_len = system_info.ramdisk_len;
-    let ramdisk_slice_start = if let Some(ramdisk_address) = system_info.ramdisk_addr {
+    let ramdisk_slice_phys_start = system_info.ramdisk_addr.map(PhysAddr::new);
+    let ramdisk_slice_start = if let Some(physical_address) = ramdisk_slice_phys_start {
         let start_page = mapping_addr_page_aligned(
             config.mappings.ramdisk_memory,
             system_info.ramdisk_len,
             &mut used_entries,
             "ramdisk start",
         );
-        let physical_address = PhysAddr::new(ramdisk_address);
         let ramdisk_physical_start_page: PhysFrame<Size4KiB> =
             PhysFrame::containing_address(physical_address);
         let ramdisk_page_count = (system_info.ramdisk_len - 1) / Size4KiB::SIZE;
@@ -382,7 +382,7 @@ where
                 u16::from(index)
             );
         }
-        let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+        let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
         entry.set_frame(page_tables.kernel_level_4_frame, flags);
 
         Some(index)
@@ -404,6 +404,9 @@ where
 
         kernel_slice_start,
         kernel_slice_len,
+        kernel_image_offset,
+
+        ramdisk_slice_phys_start,
         ramdisk_slice_start,
         ramdisk_slice_len,
     }
@@ -428,9 +431,12 @@ pub struct Mappings {
     pub tls_template: Option<TlsTemplate>,
 
     /// Start address of the kernel slice allocation in memory.
-    pub kernel_slice_start: u64,
+    pub kernel_slice_start: PhysAddr,
     /// Size of the kernel slice allocation in memory.
     pub kernel_slice_len: u64,
+    /// Relocation offset of the kernel image in virtual memory.
+    pub kernel_image_offset: VirtAddr,
+    pub ramdisk_slice_phys_start: Option<PhysAddr>,
     pub ramdisk_slice_start: Option<VirtAddr>,
     pub ramdisk_slice_len: u64,
 }
@@ -477,7 +483,8 @@ where
         let start_page = Page::containing_address(boot_info_addr);
         let end_page = Page::containing_address(memory_map_regions_end - 1u64);
         for page in Page::range_inclusive(start_page, end_page) {
-            let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+            let flags =
+                PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
             let frame = frame_allocator
                 .allocate_frame()
                 .expect("frame allocation for boot info failed");
@@ -514,6 +521,8 @@ where
         memory_regions,
         mappings.kernel_slice_start,
         mappings.kernel_slice_len,
+        mappings.ramdisk_slice_phys_start,
+        mappings.ramdisk_slice_len,
     );
 
     log::info!("Create bootinfo");
@@ -545,6 +554,9 @@ where
             .map(|addr| addr.as_u64())
             .into();
         info.ramdisk_len = mappings.ramdisk_slice_len;
+        info.kernel_addr = mappings.kernel_slice_start.as_u64();
+        info.kernel_len = mappings.kernel_slice_len as _;
+        info.kernel_image_offset = mappings.kernel_image_offset.as_u64();
         info._test_sentinel = boot_config._test_sentinel;
         info
     });
@@ -589,7 +601,7 @@ pub struct PageTables {
     ///
     /// Must be the page table that the `kernel` field of this struct refers to.
     ///
-    /// This frame is loaded into the `CR3` register on the final context switch to the kernel.  
+    /// This frame is loaded into the `CR3` register on the final context switch to the kernel.
     pub kernel_level_4_frame: PhysFrame,
 }
 
@@ -597,7 +609,13 @@ pub struct PageTables {
 unsafe fn context_switch(addresses: Addresses) -> ! {
     unsafe {
         asm!(
-            "mov cr3, {}; mov rsp, {}; push 0; jmp {}",
+            r#"
+            xor rbp, rbp
+            mov cr3, {}
+            mov rsp, {}
+            push 0
+            jmp {}
+            "#,
             in(reg) addresses.page_table.start_address().as_u64(),
             in(reg) addresses.stack_top.as_u64(),
             in(reg) addresses.entry_point.as_u64(),

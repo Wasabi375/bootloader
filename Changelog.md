@@ -1,5 +1,39 @@
 # Unreleased
 
+# 0.11.7 – 2024-02-16
+
+* Set `NO_EXECUTE` flag for all writable memory regions by @phil-opp in https://github.com/rust-osdev/bootloader/pull/409
+* adapt data layout to match LLVM's by @tsatke in https://github.com/rust-osdev/bootloader/pull/420
+
+**Full Changelog**: https://github.com/rust-osdev/bootloader/compare/v0.11.6...v0.11.7
+
+# 0.11.6 – 2024-01-28
+
+* [Embed bios and uefi binaries](https://github.com/rust-osdev/bootloader/pull/395)
+* [Add a `take` method to `Optional`](https://github.com/rust-osdev/bootloader/pull/411)
+* [Fix data layout for stage 3 target](https://github.com/rust-osdev/bootloader/pull/413)
+
+**Full Changelog**: https://github.com/rust-osdev/bootloader/compare/v0.11.5...v0.11.6
+
+# 0.11.5 – 2023-12-28
+
+* [RacyCell<T>: Data race allowed on `T`](https://github.com/rust-osdev/bootloader/pull/390)
+* [Update license field following SPDX 2.1 license expression standard](https://github.com/rust-osdev/bootloader/pull/391)
+* [kernel image fields & zero out rbp](https://github.com/rust-osdev/bootloader/pull/346)
+* [Update `rustix` dependency](https://github.com/rust-osdev/bootloader/pull/398)
+* [Add an additional MB of space to the generated FAT partition](https://github.com/rust-osdev/bootloader/pull/397)
+* [Fix: Enable test runner again](https://github.com/rust-osdev/bootloader/pull/407)
+* [Fix: Mark `ramdisk` as used in memory map](https://github.com/rust-osdev/bootloader/pull/408)
+
+**Full Changelog**: https://github.com/rust-osdev/bootloader/compare/v0.11.4...v0.11.5
+
+# 0.11.4 – 2023-07-05
+
+- [Fix bug stemming from treating an exclusive range as an inclusive ranges](https://github.com/rust-osdev/bootloader/pull/362)
+- [Update `uefi` dependency to `v0.20`](https://github.com/rust-osdev/bootloader/pull/360)
+- [Implemented sorting of uefi memory maps](https://github.com/rust-osdev/bootloader/pull/365)
+- [Run `cargo update` to fix build on nightly](https://github.com/rust-osdev/bootloader/pull/385)
+
 # 0.11.3 – 2023-03-26
 
 - [Fix docs.rs build](https://github.com/rust-osdev/bootloader/pull/358)
