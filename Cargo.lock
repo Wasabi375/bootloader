@@ -160,6 +160,8 @@ dependencies = [
  "anyhow",
  "async-process",
  "bootloader-boot-config",
+ "bootloader-x86_64-common",
+ "bootloader_api",
  "bootloader_test_runner",
  "fatfs",
  "futures",
@@ -176,6 +178,7 @@ dependencies = [
  "test_kernel_min_stack",
  "test_kernel_pie",
  "test_kernel_ramdisk",
+ "x86_64",
 ]
 
 [[package]]
