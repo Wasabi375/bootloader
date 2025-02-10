@@ -1,5 +1,11 @@
 # Unreleased
 
+## Features
+
+* add `kernel_code` mapping to the BootloaderConfig to specify the virtual address
+    at which the kernel is loaded.
+
+
 # 0.11.10 – 2025-02-10
 
 * [Remove "UEFI boot" log message](https://github.com/rust-osdev/bootloader/pull/476)

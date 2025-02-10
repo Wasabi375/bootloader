@@ -59,27 +59,43 @@ where
         let virtual_address_offset = match elf_file.header.pt2.type_().as_type() {
             header::Type::None => unimplemented!(),
             header::Type::Relocatable => unimplemented!(),
-            header::Type::Executable => VirtualAddressOffset::zero(),
+            header::Type::Executable => match kernel.config.mappings.kernel_code {
+                bootloader_api::config::Mapping::Dynamic
+                | bootloader_api::config::Mapping::FixedAddress(0) => VirtualAddressOffset::zero(),
+                _ => return Err("Invalid kernel_code mapping. Executable can only be mapped at virtual_address_offset 0."),
+            },
             header::Type::SharedObject => {
-                // Find the highest virtual memory address and the biggest alignment.
-                let load_program_headers = elf_file
-                    .program_iter()
-                    .filter(|h| matches!(h.get_type(), Ok(Type::Load)));
-                let max_addr = load_program_headers
-                    .clone()
-                    .map(|h| h.virtual_addr() + h.mem_size())
-                    .max()
-                    .unwrap_or(0);
-                let min_addr = load_program_headers
-                    .clone()
-                    .map(|h| h.virtual_addr())
-                    .min()
-                    .unwrap_or(0);
-                let size = max_addr - min_addr;
-                let align = load_program_headers.map(|h| h.align()).max().unwrap_or(1);
-
-                let offset = used_entries.get_free_address(size, align).as_u64();
-                VirtualAddressOffset::new(i128::from(offset) - i128::from(min_addr))
+                    // Find the highest virtual memory address and the biggest alignment.
+                    let load_program_headers = elf_file
+                        .program_iter()
+                        .filter(|h| matches!(h.get_type(), Ok(Type::Load)));
+                    let max_addr = load_program_headers
+                        .clone()
+                        .map(|h| h.virtual_addr() + h.mem_size())
+                        .max()
+                        .unwrap_or(0);
+                    let min_addr = load_program_headers
+                        .clone()
+                        .map(|h| h.virtual_addr())
+                        .min()
+                        .unwrap_or(0);
+                    let size = max_addr - min_addr;
+                    let align = load_program_headers.map(|h| h.align()).max().unwrap_or(1);
+                match kernel.config.mappings.kernel_code {
+                    bootloader_api::config::Mapping::Dynamic => {
+                        let offset = used_entries.get_free_address(size, align).as_u64();
+                        VirtualAddressOffset::new(i128::from(offset) - i128::from(min_addr))
+                    }
+                    bootloader_api::config::Mapping::FixedAddress(address) => {
+                        if !VirtAddr::new(address).is_aligned(align) {
+                            return Err("kernel_code mapping alignment does not match elf file");
+                        }
+                        if used_entries.try_mark_range_as_used(address, size).is_err() {
+                            return Err("kernel_code mapping is already in use");
+                        }
+                        VirtualAddressOffset::new(i128::from(address))
+                    }
+                }
             }
             header::Type::Core => unimplemented!(),
             header::Type::ProcessorSpecific(_) => unimplemented!(),
@@ -151,7 +167,7 @@ where
         Ok(tls_template)
     }
 
-    fn entry_point(&self) -> VirtAddr {
+    pub fn entry_point(&self) -> VirtAddr {
         VirtAddr::new(self.inner.virtual_address_offset + self.elf_file.header.pt2.entry_point())
     }
 }

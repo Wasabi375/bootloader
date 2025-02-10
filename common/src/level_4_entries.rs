@@ -126,8 +126,10 @@ impl UsedLevel4Entries {
         }
     }
 
-    fn mark_p4_index_as_used(&mut self, p4_index: PageTableIndex) {
+    fn mark_p4_index_as_used(&mut self, p4_index: PageTableIndex) -> bool {
+        let used = self.entry_state[usize::from(p4_index)];
         self.entry_state[usize::from(p4_index)] = true;
+        used
     }
 
     /// Marks the virtual address range of all segments as used.
@@ -141,6 +143,26 @@ impl UsedLevel4Entries {
                 virtual_address_offset + segment.virtual_addr(),
                 segment.mem_size(),
             );
+        }
+    }
+
+    /// Marks all p4 entries in the range `[address..address+size)` as used.
+    pub fn try_mark_range_as_used(&mut self, address: u64, size: u64) -> Result<(), ()> {
+        let start = VirtAddr::new(address);
+        let end_inclusive = (start + size) - 1;
+        let start_page = Page::<Size4KiB>::containing_address(start);
+        let end_page_inclusive = Page::<Size4KiB>::containing_address(end_inclusive);
+
+        let mut any_used_before = false;
+        for p4_index in u16::from(start_page.p4_index())..=u16::from(end_page_inclusive.p4_index())
+        {
+            any_used_before |= self.mark_p4_index_as_used(PageTableIndex::new(p4_index));
+        }
+
+        if any_used_before {
+            Err(())
+        } else {
+            Ok(())
         }
     }
 
